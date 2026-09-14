@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>人生シミュレーションゲーム ― 卒業後の1年間 ―</title>
+<style>
+body{font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;background:#f4f6f8;margin:0;color:#20252b}
+.wrap{max-width:1050px;margin:auto;padding:20px}
+.card{background:white;border-radius:18px;padding:22px;margin:14px 0;box-shadow:0 3px 14px #00000012}
+h1,h2,h3{margin-top:0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+button,select,input{font:inherit;padding:12px;border-radius:10px;border:1px solid #ccd2d8}
+button{cursor:pointer;background:#20252b;color:white;border:0;font-weight:700}
+button.secondary{background:#e9edf1;color:#20252b}.choice{width:100%;text-align:left;background:#fff;color:#20252b;border:2px solid #d9dee3;margin:7px 0}.choice:hover{border-color:#20252b;background:#f7f8f9}
+.stat{padding:14px;border-radius:12px;background:#f3f5f7}.big{font-size:32px;font-weight:800}.muted{color:#68717b}.hidden{display:none}.tag{display:inline-block;padding:5px 9px;border-radius:99px;background:#edf0f3;margin:3px;font-size:13px}
+table{border-collapse:collapse;width:100%}td,th{padding:10px;border-bottom:1px solid #ddd;text-align:left}
+.rank1{font-size:1.15em;font-weight:800}
+.notice{padding:12px;border-left:5px solid #444;background:#f1f3f5;border-radius:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>人生シミュレーションゲーム</h1>
+<p class="muted">高校卒業後の「1年間」を4人で生き抜け！ ― 正解のない人生で、最も充実した1年を作れ。</p>
+
+<div id="setup" class="card">
+<h2>① 班の人生を設定</h2>
+<div class="grid">
+<div><label>班名<br><input id="team" placeholder="例：3年1組 A班"></label></div>
+<div><label>進路<br><select id="career"><option>大学</option><option>専門学校</option><option>就職</option><option>フリーター</option></select></label></div>
+<div><label>住まい<br><select id="home"><option>実家暮らし</option><option>学生寮</option><option>一人暮らし</option><option>友達とシェア</option></select></label></div>
+<div><label>生活方針<br><select id="style"><option>節約重視</option><option>バランス重視</option><option>経験重視</option></select></label></div>
+<div><label>人生の目標<br><select id="goal"><option>お金</option><option>成長</option><option>人間関係</option><option>幸福</option></select></label></div>
+</div>
+<div class="notice" style="margin-top:14px">※班ごとに「人生プロフィール」が変わります。選択によって同じイベントでも結果が変化します。</div>
+<button onclick="startGame()" style="margin-top:14px">この人生でスタート</button>
+</div>
+
+<div id="game" class="hidden">
+<div class="card">
+<h2 id="monthTitle"></h2>
+<div id="profile"></div>
+<div class="grid" id="stats"></div>
+</div>
+<div class="card" id="policyCard">
+<h3>今月の生活方針を決めよう</h3>
+<p class="muted">4人で相談して1つ選択。毎月の生活に影響します。</p>
+<div id="policies"></div>
+</div>
+<div class="card hidden" id="eventCard">
+<h3 id="eventTitle"></h3><p id="eventText"></p>
+<div id="choices"></div>
+</div>
+<div class="card hidden" id="resultMonth"></div>
+</div>
+
+<div id="final" class="hidden card">
+<h2>🎓 1年間の人生、終了！</h2>
+<div id="finalText"></div>
+<button onclick="showTeacher()" style="margin-top:12px">教師用ランキングへ</button>
+</div>
+
+<div id="teacher" class="hidden card">
+<h2>教師用ランキング画面</h2>
+<p class="muted">各班の「人生充実度」を入力してください。生徒にはこの画面を見せず、発表時に使用します。</p>
+<div class="grid">
+<input id="rankTeam" placeholder="班名">
+<input id="rankScore" type="number" min="0" max="100" placeholder="人生充実度（0～100）">
+</div>
+<button onclick="addRank()" style="margin-top:10px">ランキングに追加</button>
+<button class="secondary" onclick="clearRanks()" style="margin-top:10px">ランキングを消去</button>
+<div id="ranking" style="margin-top:18px"></div>
+</div>
+</div>
+
+<script>
+let S={}, ranks=JSON.parse(localStorage.getItem("lifeRanks")||"[]");
+
+const events=[
+["スマホ故障","スマートフォンが突然壊れた。修理・買い替えが必要だ。",[
+["修理する",-3,-1,0,0],["新品を買う",-10,2,0,0],["しばらく我慢する",0,-3,0,1]]],
+["旅行の誘い","友人から旅行に誘われた。お金はかかるが思い出になりそうだ。",[
+["行く",-8,8,10,2],["短い日程にする",-4,4,5,1],["断って節約する",5,-2,-2,1]]],
+["資格チャンス","興味のある資格講座を発見。今なら挑戦できる。",[
+["挑戦する",-6,2,1,10],["情報収集だけする",0,1,2,3],["見送る",3,0,0,0]]],
+["バイト先の評価","頑張りが認められ、仕事を任されるようになった。",[
+["積極的に受ける",4,0,1,8],["無理しない",-1,3,2,3],["断る",0,1,0,0]]],
+["家族から相談","家族から少し助けてほしいと相談された。",[
+["できる範囲で助ける",-5,4,8,3],["一緒に方法を考える",-1,3,7,5],["自分を優先する",2,-2,-4,1]]],
+["突然の出費","予想していなかった大きな出費が発生した。",[
+["貯金から払う",-10,-1,0,0],["安い方法を探す",-5,1,1,2],["後回しにする",0,-4,-2,-1]]],
+["怪しい高収入バイト","簡単なのに高収入という仕事を紹介された。条件には少し不自然な点がある。",[
+["断る",0,1,2,1],["詳しく調べる",0,2,3,5],["勢いで応募する",10,-8,-8,-8]]],
+["大きな買い物","欲しかったものがセールになっている。",[
+["今買う",-15,6,1,0],["中古・代替品を探す",-6,3,1,1],["我慢する",5,-1,0,2]]],
+["体調不良","少し疲れがたまっている。",[
+["しっかり休む",-2,8,1,2],["予定を減らす",0,5,2,3],["無理して続ける",2,-8,-2,4]]],
+["引っ越しの話","より便利な住まいへの引っ越しを考える機会が来た。",[
+["引っ越す",-12,3,4,5],["今のまま工夫する",2,2,1,3],["友達と相談する",-3,4,8,4]]],
+["人間関係のすれ違い","仲の良い人と意見がぶつかった。",[
+["話し合う",-1,2,8,3],["少し距離を置く",0,1,2,2],["感情のまま言い返す",0,-6,-10,-2]]],
+["学び直し","授業・仕事以外で学びたいことが見つかった。",[
+["時間を作る",-3,2,1,10],["週末だけやる",-2,2,2,6],["今は余裕がない",2,0,0,1]]],
+["臨時収入","思いがけず臨時収入が入った。",[
+["貯金する",8,1,0,2],["経験に使う",-2,8,5,3],["半分ずつ使う",4,5,3,2]]],
+["友達のピンチ","友達が困っている。助けを求められた。",[
+["助ける",-4,4,10,3],["できる範囲で助ける",-1,3,7,2],["断る",2,-1,-4,1]]],
+["進路の再考","今の進路について、別の可能性を知る機会が来た。",[
+["話を聞く",0,2,2,6],["今の道を深める",1,1,1,8],["何もしない",2,0,0,0]]],
+["趣味ブーム","新しい趣味にハマりそうだ。",[
+["本格的に始める",-5,8,5,5],["ほどほどに楽しむ",-2,5,3,3],["時間を使わない",2,-1,0,1]]],
+["アルバイトの誘い","条件の良いアルバイトを紹介された。",[
+["挑戦する",5,1,2,7],["今の生活を優先する",0,3,2,3],["断る",0,0,0,0]]],
+["大切な記念日","大切な人との記念日。どう過ごす？",[
+["しっかり祝う",-5,7,9,1],["手作り・節約で祝う",-2,6,8,2],["普通に過ごす",0,1,1,0]]],
+["将来への不安","このままでいいのか、少し不安になってきた。",[
+["誰かに相談する",-1,4,7,5],["行動計画を作る",0,2,2,9],["気にしない",1,0,0,0]]],
+["学業・仕事の成功","努力してきたことが評価された。",[
+["さらに挑戦する",3,3,1,10],["周りにも感謝する",2,5,7,7],["現状維持",2,2,2,3]]],
+["SNSで炎上寸前","軽い気持ちの投稿が誤解されそうになった。",[
+["削除して説明する",0,1,5,3],["友人に相談する",0,2,6,2],["放置する",0,-6,-8,-3]]],
+["欲しい物と貯金","欲しい物がある。でも貯金も大切だ。",[
+["買う",-12,5,1,0],["目標額まで貯める",5,-1,0,3],["中古などを探す",-5,3,1,2]]],
+["ボランティア","地域の活動に誘われた。",[
+["参加する",-2,4,8,4],["短時間だけ参加",-1,3,5,2],["参加しない",1,0,0,0]]],
+["新しい友人","新しい環境で気の合う人と出会った。",[
+["積極的に交流する",-2,5,10,4],["少しずつ仲良くなる",0,3,6,3],["距離を置く",0,-1,0,1]]],
+["副業・小さな挑戦","小さな仕事を始めるチャンス。",[
+["挑戦する",4,1,2,7],["試しに少しだけ",2,2,2,4],["やめておく",0,0,0,1]]],
+["家電の故障","生活に必要な家電が故障した。",[
+["買い替える",-10,1,0,1],["修理する",-4,0,0,2],["代用品でしのぐ",0,-3,0,0]]],
+["友達との大イベント","仲間で大きなイベントを企画することになった。",[
+["中心になって企画",-7,7,10,6],["参加者として楽しむ",-4,6,7,3],["今回は不参加",1,0,-2,1]]],
+["努力の停滞","頑張っているのに成果が出ない。",[
+["方法を変える",-2,2,2,7],["人に相談する",-1,3,7,5],["一旦休む",0,5,2,2]]],
+["年末の振り返り","この1年を振り返る機会が来た。",[
+["来年の目標を立てる",0,4,3,8],["周囲に感謝する",0,5,9,3],["ゆっくり休む",1,7,2,2]]],
+["最後の大きな選択","1年間の集大成。今後につながる選択をする。",[
+["大きく挑戦する",-8,4,3,12],["安定を選ぶ",5,3,4,5],["人とのつながりを選ぶ",-3,7,12,4]]]
+];
+
+const profiles={
+"大学":{money:38,h:58,r:52,g:62},
+"専門学校":{money:35,h:60,r:55,g:68},
+"就職":{money:55,h:55,r:50,g:58},
+"フリーター":{money:42,h:63,r:58,g:45}
+};
+function clamp(x){return Math.max(0,Math.min(100,Math.round(x)))}
+function startGame(){
+ let career=document.getElementById("career").value, home=document.getElementById("home").value, style=document.getElementById("style").value, goal=document.getElementById("goal").value;
+ S={team:document.getElementById("team").value||"無名班",career,home,style,goal,month:1,...profiles[career],money:profiles[career].money,
+ history:[], used:[], policy:null};
+ // Home modifies starting life
+ if(home==="実家暮らし"){S.money+=10;S.h+=2}
+ if(home==="学生寮"){S.money+=4;S.r+=2;S.g+=2}
+ if(home==="一人暮らし"){S.money-=4;S.h+=4;S.g+=4}
+ if(home==="友達とシェア"){S.money+=1;S.h+=5;S.r+=7}
+ // different "life luck" per team, based on team name hash
+ let hash=[...S.team].reduce((a,c)=>a+c.charCodeAt(0),0)%7;
+ S.luck=hash-3;
+ document.getElementById("setup").classList.add("hidden");document.getElementById("game").classList.remove("hidden");
+ render(); choosePolicy();
+}
+function render(){
+ const monthNames=["4月","5月","6月","7月","8月","9月","10月","11月","12月","1月","2月","3月"]; document.getElementById("monthTitle").textContent=`${monthNames[S.month-1]} / 12か月目`;
+ document.getElementById("profile").innerHTML=`<span class="tag">${S.career}</span><span class="tag">${S.home}</span><span class="tag">${S.style}</span><span class="tag">目標：${S.goal}</span>`;
+ document.getElementById("stats").innerHTML=
+ `<div class="stat">💰 お金<div class="big">${S.money}万円</div></div>
+ <div class="stat">😊 幸福<div class="big">${S.h}</div></div>
+ <div class="stat">🤝 人間関係<div class="big">${S.r}</div></div>
+ <div class="stat">📈 成長<div class="big">${S.g}</div></div>`;
+}
+function choosePolicy(){
+ let ps=[["仕事・勉強を優先",0,-2,-1,5],["人間関係を優先",-2,3,6,2],["休息・趣味を優先",-1,6,2,0],["貯金を優先",5,-2,0,1]];
+ document.getElementById("policies").innerHTML=ps.map((p,i)=>`<button class="choice" onclick="applyPolicy(${i})"><b>${p[0]}</b><br><span class="muted">お金 ${p[1]>=0?"+":""}${p[1]} / 幸福 ${p[2]>=0?"+":""}${p[2]} / 人間関係 ${p[3]>=0?"+":""}${p[3]} / 成長 ${p[4]>=0?"+":""}${p[4]}</span></button>`).join("");
+}
+function applyPolicy(i){
+ const p=[["仕事・勉強を優先",0,-2,-1,5],["人間関係を優先",-2,3,6,2],["休息・趣味を優先",-1,6,2,0],["貯金を優先",5,-2,0,1]][i];
+ S.money+=p[1];S.h+=p[2];S.r+=p[3];S.g+=p[4]; render();
+ document.getElementById("policyCard").classList.add("hidden"); showEvent();
+}
+function pickEvent(){
+ let available=events.map((e,i)=>i).filter(i=>!S.used.includes(i));
+ // every 3rd month slightly favor a major event
+ let candidates=available.filter(i=>![0,5,8,9,27].includes(i) || S.month%3===0);
+ if(!candidates.length)candidates=available;
+ let idx=candidates[Math.floor(Math.random()*candidates.length)];
+ S.used.push(idx); return events[idx];
+}
+function showEvent(){
+ let e=pickEvent();S.current=e;
+ document.getElementById("eventCard").classList.remove("hidden");
+ document.getElementById("eventTitle").textContent="⚡ "+e[0];
+ document.getElementById("eventText").textContent=e[1];
+ document.getElementById("choices").innerHTML=e[2].map((c,i)=>`<button class="choice" onclick="chooseEvent(${i})"><b>${c[0]}</b></button>`).join("");
+}
+function chooseEvent(i){
+ let c=S.current[2][i], bonus=S.luck;
+ S.money+=c[1];S.h+=c[2];S.r+=c[3];S.g+=c[4];
+ // style/goal create different lives
+ if(S.style==="節約重視" && c[1]>0)S.money+=2;
+ if(S.style==="経験重視" && c[2]>3)S.h+=2;
+ if(S.goal==="お金")S.money+=1;
+ if(S.goal==="幸福")S.h+=1;
+ if(S.goal==="人間関係")S.r+=1;
+ if(S.goal==="成長")S.g+=1;
+ // luck subtly changes event outcome
+ if((S.month+i)%5===0)S.money+=bonus;
+ S.money=Math.max(0,Math.round(S.money));S.h=clamp(S.h);S.r=clamp(S.r);S.g=clamp(S.g);
+ const monthNames=["4月","5月","6月","7月","8月","9月","10月","11月","12月","1月","2月","3月"]; S.history.push({month:monthNames[S.month-1],event:S.current[0],choice:c[0]});
+ render();
+ document.getElementById("eventCard").classList.add("hidden");
+ document.getElementById("resultMonth").classList.remove("hidden");
+ const monthNames=["4月","5月","6月","7月","8月","9月","10月","11月","12月","1月","2月","3月"]; document.getElementById("resultMonth").innerHTML=`<h3>${monthNames[S.month-1]}の結果</h3><p>「${S.current[0]}」→ <b>${c[0]}</b></p><p class="muted">今月の判断が、少しずつ1年間の人生を変えていきます。</p><button onclick="nextMonth()">次の月へ</button>`;
+}
+function nextMonth(){
+ document.getElementById("resultMonth").classList.add("hidden");
+ if(S.month>=12){finish();return}
+ S.month++;render();document.getElementById("policyCard").classList.remove("hidden");choosePolicy();
+}
+function finish(){
+ let moneyPart=Math.min(25,Math.max(0,S.money/8));
+ let score=Math.round(moneyPart+S.h*.25+S.r*.25+S.g*.25);
+ score=Math.max(0,Math.min(100,score));
+ let rank=score>=90?"SS":score>=80?"S":score>=70?"A":score>=60?"B":"C";
+ S.score=score;
+ document.getElementById("game").classList.add("hidden");document.getElementById("final").classList.remove("hidden");
+ document.getElementById("finalText").innerHTML=`
+ <p><b>${S.team}</b> の1年間が終了しました。</p>
+ <div class="stat"><div class="muted">人生充実度</div><div class="big">${score} / 100</div><b>ランク ${rank}</b></div>
+ <div class="grid" style="margin-top:12px">
+ <div class="stat">💰 ${S.money}万円</div><div class="stat">😊 幸福 ${S.h}</div>
+ <div class="stat">🤝 人間関係 ${S.r}</div><div class="stat">📈 成長 ${S.g}</div>
+ </div>
+ <div class="notice" style="margin-top:14px"><b>振り返り</b><br>「人生充実度を上げたと思う選択は？」「逆に、もっと違う選択をしてもよかったと思う場面は？」</div>
+ <p class="muted">結果コード：${S.team} / ${score}点</p>`;
+}
+function showTeacher(){document.getElementById("final").classList.add("hidden");document.getElementById("teacher").classList.remove("hidden");renderRanks()}
+function addRank(){
+ let team=document.getElementById("rankTeam").value.trim(),score=Number(document.getElementById("rankScore").value);
+ if(!team||score<0||score>100)return alert("班名と0～100点を入力してください。");
+ ranks.push({team,score});ranks.sort((a,b)=>b.score-a.score);localStorage.setItem("lifeRanks",JSON.stringify(ranks));renderRanks();
+ document.getElementById("rankTeam").value="";document.getElementById("rankScore").value="";
+}
+function clearRanks(){if(confirm("ランキングをすべて消去しますか？")){ranks=[];localStorage.removeItem("lifeRanks");renderRanks()}}
+function renderRanks(){
+ document.getElementById("ranking").innerHTML=ranks.length?`<table><tr><th>順位</th><th>班</th><th>人生充実度</th></tr>${ranks.map((r,i)=>`<tr class="${i===0?'rank1':''}"><td>${i+1}位</td><td>${i===0?'🏆 ':''}${r.team}</td><td>${r.score}点</td></tr>`).join("")}</table>`:"<p class='muted'>まだランキングがありません。</p>";
+}
+</script>
+</body>
+</html>
